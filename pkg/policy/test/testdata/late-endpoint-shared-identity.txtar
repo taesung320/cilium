@@ -1,0 +1,48 @@
+# An endpoint exposed after a policy import took its endpoint-list snapshot,
+# reusing an identity another live endpoint already holds (so the identitymanager
+# observer does not fire) and which the import does not select, must still
+# realize the post-import revision.
+# Interleaving observed in ci-kpr-aks run 30509328039.
+
+hive/start
+
+env pod_labels=k8s:io.kubernetes.pod.namespace=kube-system,k8s:k8s-app=metrics-server
+identity/allocate ${pod_labels}
+env --from-stdout pod_id
+
+# Endpoint A. Its identity policy is computed and committed at revision 1.
+endpoint/create ${pod_id} ${pod_labels}
+
+# Import a policy that does not select the shared identity: the repository goes
+# to revision 2 but no recomputation is scheduled for ${pod_id}.
+policy/import all-entities-deny.yaml
+stdout 'rev=2'
+
+# Endpoint A is in the import snapshot, so it is bumped to 2. Waiting for it
+# also guarantees endpointmanager.UpdatePolicy has finished, i.e. the snapshot
+# is closed before endpoint B appears.
+endpoint/wait-for-policy-revision 2
+
+db/show --columns Identity,Revision policy-computations
+stdout ${pod_id}.+1
+
+# Endpoint B: same labels, hence the same identity (refcount 1 -> 2), exposed
+# strictly after the snapshot.
+endpoint/create ${pod_id} ${pod_labels}
+
+# Endpoint B must realize revision 2 as well.
+endpoint/wait-for-policy-revision 2
+
+-- all-entities-deny.yaml --
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: "all-entities-deny"
+  namespace: "cilium-test-3"
+spec:
+  endpointSelector:
+    matchLabels:
+      "k8s:io.kubernetes.pod.namespace": cilium-test-3
+  egressDeny:
+  - toEntities:
+    - all
