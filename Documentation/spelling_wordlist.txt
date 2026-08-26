@@ -32,6 +32,7 @@ Dangaard
 Datadog
 Dataplane
 Deconfigure
+Dependabot
 Dinan
 Disenroll
 Dockerfile
@@ -287,6 +288,7 @@ cqlsh
 crd
 createtopic
 crio
+cron
 cronJob
 crt
 crypto
@@ -527,6 +529,7 @@ kubespray
 kvstore
 kvstoremesh
 kvstores
+labelled
 lan
 latencies
 lbipam
